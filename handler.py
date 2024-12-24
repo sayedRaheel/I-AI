@@ -2,14 +2,17 @@ import runpod
 import asyncio
 import base64
 import outetts
+import torch
 from groq import Groq
 import os
 
 # Initialize TTS and Groq clients
+
 def setup_tts():
     model_config = outetts.HFModelConfig_v1(
         model_path="OuteAI/OuteTTS-0.2-500M",
-        language="en"
+        language="en",
+        device="cuda" if torch.cuda.is_available() else "cpu"
     )
     interface = outetts.InterfaceHF(model_version="0.2", cfg=model_config)
     return interface
