@@ -5,45 +5,69 @@ import outetts
 import torch
 from groq import Groq
 import os
+import time  # Add this import
 
-# Initialize TTS and Groq clients
+# Global variables
+tts_interface = None
+speaker = None
+groq_client = None
 
-def setup_tts():
-    model_config = outetts.HFModelConfig_v1(
-        model_path="OuteAI/OuteTTS-0.2-500M",
-        language="en",
-        device="cuda" if torch.cuda.is_available() else "cpu"
-    )
-    interface = outetts.InterfaceHF(model_version="0.2", cfg=model_config)
-    return interface
+def initialize_models():
+    global tts_interface, speaker, groq_client
+    
+    if tts_interface is None:
+        start_time = time.time()
+        print("Starting model initialization...")
+        
+        model_config = outetts.HFModelConfig_v1(
+            model_path="OuteAI/OuteTTS-0.2-500M",
+            language="en",
+            device="cuda" if torch.cuda.is_available() else "cpu"
+        )
+        tts_interface = outetts.InterfaceHF(model_version="0.2", cfg=model_config)
+        print(f"Model loaded in {time.time() - start_time:.2f}s")
+        
+        try:
+            speaker = tts_interface.load_speaker("sayed_voice.json")
+            print("Speaker profile loaded")
+        except:
+            speaker = tts_interface.load_default_speaker(name="male_1")
+            print("Using default speaker")
+        
+        groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
+        print(f"Total initialization time: {time.time() - start_time:.2f}s")
+    
+    return tts_interface, speaker, groq_client
 
 async def async_handler(job):
     try:
-        # Initialize clients
-        groq_client = Groq(api_key=os.environ["GROQ_API_KEY"])
-        tts_interface = setup_tts()
+        start_time = time.time()
+        print("\n=== New Request Started ===")
         
-        # Load voice profile
-        try:
-            speaker = tts_interface.load_speaker("sayed_voice.json")
-        except:
-            speaker = tts_interface.load_default_speaker(name="male_1")
+        global tts_interface, speaker, groq_client
         
+        if tts_interface is None:
+            print("First-time initialization...")
+            tts_interface, speaker, groq_client = initialize_models()
+        else:
+            print("Using existing model")
+            
         # Get input from job
         input_type = job["input"]["type"]
         
         if input_type == "text":
             text_input = job["input"]["text"]
-        else:  # audio input
+            print("Processing text input")
+        else:
+            print("Processing audio input...")
+            audio_start = time.time()
             audio_base64 = job["input"]["audio"]
             audio_bytes = base64.b64decode(audio_base64)
             
-            # Save temporary file
             temp_filename = "/tmp/temp_recording.wav"
             with open(temp_filename, "wb") as f:
                 f.write(audio_bytes)
                 
-            # Transcribe using Groq
             with open(temp_filename, "rb") as file:
                 translation = groq_client.audio.translations.create(
                     file=(temp_filename, file.read()),
@@ -52,13 +76,13 @@ async def async_handler(job):
                     temperature=0.0
                 )
             text_input = translation.text
-
-        # Get LLM response
+            print(f"Audio transcription took {time.time() - audio_start:.2f}s")
+        
+        # LLM Response
+        llm_start = time.time()
         chat_completion = groq_client.chat.completions.create(
             messages=[
-                {
-                    "role": "system",
-                    "content": """You are Sayed Raheel Hussain's AI assistant. Provide concise, professional responses based on these facts:
+                {"role": "system", "content": """You are Sayed Raheel Hussain's AI assistant. Provide concise, professional responses based on these facts:
 
 Professional Background:
 - ML Engineer & AI Researcher based in New Jersey
@@ -130,48 +154,55 @@ Communication Style:
 - Acknowledge being Sayed's AI assistant
 - Focus on ML/AI expertise when relevant
 
-Remember: Respond in 2-3 sentences while maintaining accuracy and professionalism. In respone Say 'As Sayed's Assistant' """
-                },
-                {
-                    "role": "user",
-                    "content": text_input
-                }
+Remember: Respond in 2-3 sentences while maintaining accuracy and professionalism. In respone Say 'As Sayed's Assistant' """},
+                {"role": "user", "content": text_input}
             ],
             model="llama-3.3-70b-versatile",
             temperature=0.5,
             max_tokens=2048
         )
-        
         ai_response = chat_completion.choices[0].message.content
+        print(f"LLM response took {time.time() - llm_start:.2f}s")
         
-        # Generate speech with voice
-        output = tts_interface.generate(
-            text=ai_response,
-            temperature=0.8,
-            repetition_penalty=1.2,
-            max_length=4096,
-            speaker=speaker
-        )
+        # TTS Generation
+        tts_start = time.time()
+        with torch.inference_mode():
+            print("Starting TTS generation...")
+            output = tts_interface.generate(
+                text=ai_response,
+                temperature=0.8,
+                repetition_penalty=1.2,
+                max_length=4096,
+                speaker=speaker
+            )
+        print(f"TTS generation took {time.time() - tts_start:.2f}s")
         
-        # Save and convert to base64
+        # Save and convert
         output_path = "/tmp/response.wav"
         output.save(output_path)
         with open(output_path, "rb") as f:
             audio_base64 = base64.b64encode(f.read()).decode()
+            
+        # Cleanup
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
+        if os.path.exists(output_path):
+            os.remove(output_path)
+            
+        print(f"Total request time: {time.time() - start_time:.2f}s")
         
         return {
-            "user_input": {
-                "type": input_type,
-                "text": text_input
-            },
-            "assistant_response": {
-                "text": ai_response,
-                "audio": audio_base64
-            }
+            "user_input": {"type": input_type, "text": text_input},
+            "assistant_response": {"text": ai_response, "audio": audio_base64}
         }
         
     except Exception as e:
+        print(f"Error in handler: {str(e)}")
         return {"error": str(e)}
+
+print("Starting server...")
+initialize_models()
+print("Server ready!")
 
 runpod.serverless.start({
     "handler": async_handler
