@@ -1,4 +1,4 @@
-FROM runpod/pytorch:2.0.1-py3.10-cuda11.7.0
+FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
