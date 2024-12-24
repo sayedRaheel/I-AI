@@ -1,6 +1,9 @@
-# AI Voice Assistant with Custom Voice Cloning
+# I-AI: A Digital Chatbot Featuring a Custom-Cloned Version of Its Maker's Voice
 
-A serverless AI assistant that can process both text and audio inputs, respond using LLM (Groq), and generate responses using a SAYED RAHEEL'S custom-cloned voice. Deployed on RunPod for scalable, GPU-accelerated processing.
+A serverless AI assistant that can process both text and audio inputs, respond using LLM (Groq), and generate responses using a custom-cloned version of SAYED RAHEEL'S voice. Deployed on RunPod for scalable, GPU-accelerated processing. This tool enables you to create a digital clone of yourself by inputting basic information into the system prompt and cloning your voice, so the chatbot sounds just like you.
+
+## Voice Cloning and Profile
+You can clone your voice and get your voice profile as JSON using the OuteTTS tool available at: https://github.com/edwko/OuteTTS. In this system, the voice profile is saved as sayed_voice.json.
 
 ## Features
 
@@ -160,14 +163,14 @@ The system handles various error scenarios:
 
 ## License
 
-[Your chosen license]
+MIT License
 
 ## Contact
 
-[Your contact information]
+https://www.linkedin.com/in/sayedraheel/
 
 ## Acknowledgments
 
 - RunPod for serverless infrastructure
 - Groq for LLM API
-- OuteTTS for voice synthesis
+- OuteTTS for voice synthesis- https://github.com/edwko/OuteTTS
